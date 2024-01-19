@@ -2,6 +2,9 @@
   <div>
     <div class="canvas" v-if="canvas">
       <div class="content" v-html="canvasObsah"></div>
+      <infinite-scroll @overflow="onOverflow" v-if="overflow">
+        <div v-for="(item, i) of infiniteScrollFeed" class="infiniteScroll" v-html="item" :key="i" />
+      </infinite-scroll>
       <div class="errorMessage" @click="errorMessage = null" v-if="errorMessage">{{ errorMessage }}</div>
     </div>
     <form id="uploadForm">
@@ -33,7 +36,6 @@
           v-model="command" 
         />
       </div>
-      <input class="input" type="password" ref="heslo" @change="provedPrikaz" v-model="heslo" v-if="heslo !== null" placeholder="Zadejte heslo..." />
     </div>
     <div class="outputFrame" ref="outputFrame">
       <div :class="['output', line[1], index === outputIndex ? 'oznacenyRadek' : '']" v-for="(line, index) of filteredOutput" ref="output">
@@ -47,9 +49,6 @@
       <button @click="outputNahoru">&uarr;</button>
       <button @click="outputDolu">&darr;</button>
     </div>
-    <div class="floatMenu" v-if="floatMenu">
-      <div v-for="[nazev, type] of menuFunkce" :class="['floatItem', type]" @click="menuClick(nazev, type, false)">{{ nazev }}</div>
-    </div>
   </div>
 </template>
 
@@ -58,6 +57,8 @@ import axios from 'axios'
 import yaml from 'js-yaml'
 import _ from 'lodash'
 import * as vue from 'vue'
+import InfiniteScroll from './InfiniteScroll.vue'
+import { marked } from 'marked'
 const CryptoJS = require("crypto-js");
 import { renderToString } from 'vue/server-renderer';
 
@@ -89,8 +90,11 @@ export default {
       canvas: null,
       canvasRefresh: 0,
       errorMessage: null,
+      infiniteScrollFeed: [],
+      overflow: ""
     }
   },
+  components: { InfiniteScroll },
   computed: {
     zprava() {
       return this.fPrefix + "..."
@@ -358,6 +362,12 @@ export default {
         params: { ts: new Date().getTime() }
       })
       return result.data
+    },
+    md(input) {
+      return marked.parse(input)
+    },
+    onOverflow() {
+      this.f(this.overflow)
     }
   },
   watch: {
@@ -418,9 +428,6 @@ export default {
       if (this.outputIndex === -1) {
         localStorage.setItem("command", value)
       }
-    },
-    canvas(value) {
-      localStorage.setItem('canvas', value)
     },
     canvasObsah() {
       this.$nextTick(() => {
