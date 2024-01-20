@@ -460,6 +460,9 @@ export default {
           })
         }
       })
+    },
+    infiniteScrollFeed() {
+      this.canvasRefresh++
     }
   },
   mounted() {
