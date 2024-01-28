@@ -16,7 +16,6 @@ export default {
     },
     methods: {
         overflow() {
-            console.log("TRIGGER")
             this.$emit('overflow')
         },
         scroll() {

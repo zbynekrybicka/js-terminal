@@ -8,7 +8,7 @@
       <div class="errorMessage" @click="errorMessage = null" v-if="errorMessage">{{ errorMessage }}</div>
     </div>
     <form id="uploadForm">
-      <input type="file" accept="image/*" ref="uploadImage" @change="uploadFile">
+      <input type="file" accept="image/*" ref="uploadImage" @change="uploadFile" />
     </form>
 
     <div :class="['commandline', viceRadek ? 'viceRadek' : '']" ref="commandline">
@@ -34,7 +34,7 @@
           @keyup.ctrl.enter="provedPrikaz"
           @keyup.esc="viceRadek = false"
           v-model="command" 
-        />
+        ></textarea>
       </div>
     </div>
     <div class="outputFrame" ref="outputFrame">
@@ -338,18 +338,18 @@ export default {
         }
       }
     },
-    selectUploadFile(path) {
+    upload() {
       this.$refs.uploadImage.click()
-      this.imageFilePath = path
     },
-    uploadFile() {
+    async uploadFile() {
       const formData = new FormData();
-      formData.append("path", this.imageFilePath)
       formData.append("image", this.$refs.uploadImage.files[0]);
-      axios.post(API_URL + "/image", formData, {
+      return await axios.post(API_URL + "/image", formData, {
         headers: { Authorization }
-      }).then(() => {
+      }).then(res => {
         this.$refs.uploadImage.value = ""
+        this.f("upload", res.data)
+        this.log(res.data, "normal", "")
       })
     },
     async loadFileFromUrl(url, path) {
@@ -357,17 +357,17 @@ export default {
         headers: { Authorization }
       }).then(res => res.data)
     },
-    async images() {
-      const result = await axios.get(API_URL + "/image", {
-        params: { ts: new Date().getTime() }
-      })
-      return result.data
-    },
     md(input) {
       return marked.parse(input)
     },
     onOverflow() {
       this.f(this.overflow)
+    },
+
+    deleteImage(path) {
+      axios.delete(API_URL + "/image/" + path, {
+        headers: { Authorization }
+      })
     }
   },
   watch: {
@@ -461,8 +461,11 @@ export default {
         }
       })
     },
-    infiniteScrollFeed() {
-      this.canvasRefresh++
+    infiniteScrollFeed: {
+      handler() {
+        this.canvasRefresh++
+      },
+      deep: true
     }
   },
   mounted() {
