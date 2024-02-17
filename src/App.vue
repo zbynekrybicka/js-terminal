@@ -24,10 +24,14 @@
         v-if="!viceRadek"
         v-model="command"
         ref="singleInput"
+        list="oblibene-prikazy"
       />
+      <datalist id="oblibene-prikazy" v-if="autocomplete">
+        <option :value="prikaz" v-for="(prikaz, i) of this.data.fav?.list" :key="i" />
+      </datalist>
       <div v-if="viceRadek" class="viceRadek-kontejner">
         <textarea 
-          class="input" 
+          :class="['input', small ? 'small' : '']" 
           :placeholder="zprava" 
           ref="input"  
           id="input" 
@@ -44,10 +48,14 @@
         <div class="pre-output" v-if="line[3]" v-text="line[0]" />
       </div>
     </div>
-    <div class="menu" v-if="menuFunkce.length > 0">
+    <div :class="['menu', filteredOutput.length > 0 ? filteredOutput[0][1] : '']">
       <button @click="viceRadek = !viceRadek">*</button>
       <button @click="outputNahoru">&uarr;</button>
       <button @click="outputDolu">&darr;</button>
+      <input type="checkbox" v-model="autocomplete" />
+      <input type="checkbox" v-model="continual" />
+      <input type="checkbox" v-model="small" />
+      <button @click="provedPrikaz">&crarr;</button>
     </div>
   </div>
 </template>
@@ -91,7 +99,10 @@ export default {
       canvasRefresh: 0,
       errorMessage: null,
       infiniteScrollFeed: [],
-      overflow: ""
+      overflow: "",
+      autocomplete: false,
+      continual: false,
+      small: false,
     }
   },
   components: { InfiniteScroll },
@@ -109,19 +120,6 @@ export default {
       this.viceRadek
       return this.$refs.commandline.clientHeight + "px"
     },
-    menuFunkce() {
-      if (!this.data.f) {
-        return []
-      }
-      let result
-      if (this.menuPrefix.length > 0) {
-        result = Object.entries(eval(`this.data.f.${this.menuPrefix.join(".")}`))
-        result.unshift(["<<<", "() => {}"])
-      } else {
-        result = Object.entries(this.data.f)
-      }
-      return result.filter(([nazev, obsah]) => (typeof obsah === "object" || obsah.split("=>")[0].trim() === "()")).map(([nazev, obsah]) => ([nazev, typeof obsah]))
-    },
     yaml() {
       return yaml
     },
@@ -129,8 +127,10 @@ export default {
       if (this.canvas) {
         try {
           this.canvasRefresh
-          return this.f(this.canvas)
+          const result = this.f(this.canvas)
+          return result
         } catch (e) {
+          console.log(e)
           this.errorMessage = e.toString()
           return ''
         }
@@ -147,11 +147,8 @@ export default {
       }
 
       let value = this.command
-      this.command = ""
-
-      if (value.length === 0) {
-        this.viceRadek = false
-        return;
+      if (!this.continual) {
+        this.command = ""
       }
 
       let finalValue = value
@@ -168,22 +165,8 @@ export default {
       if (match) {
         value = `this.f("${match[1]}", ${match[3]})`
       }
-
-      match = value.match(/#\?:/)
-      if (match && this.heslo === null) {
-        this.command = value
-        this.heslo = ""
-        this.$nextTick(() => this.$refs.heslo.focus())
-        return;
-      }
-
-
       
       try {
-        if (this.heslo !== null) {
-          value = value.replace('#?:', this.heslo)
-          this.heslo = null
-        }
         const result = await eval(value)
         this.log(typeof result !== "string" ? yaml.dump(result) : result, 'normal', finalValue, typeof result === "string")
       } catch(ex) {
@@ -234,22 +217,15 @@ export default {
       localStorage.setItem("dir", fPrefix)
     },
     f(path, ...params) {
-      if (!this.data.f) {
+      let code
+      try {
+        code = eval(`this.data.${path}`)
+      } catch (e) {
         return
       }
-      let code
-      if (path[0] === ".") {
-        code = eval(`this.data.f${path}`)
-      } else {
-        try {
-          code = eval(`this.data.f.${this.fPrefix}.${path}`)
-          if (!code) {
-            code = eval(`this.data.f.${path}`)
-          }
-        } catch (e) {
-          code = eval(`this.data.f.${path}`)
-        }
-      }
+      if (!code) {
+        return
+      } 
       const fce = eval(code);
       if (fce) {
         return fce(...params)
@@ -316,7 +292,9 @@ export default {
     },
     log(vystup, status, prikaz, wrap = true) {
       this.output.unshift([vystup, status, prikaz, wrap])
-      this.viceRadek = false
+      if (!this.continual) {
+        this.viceRadek = false
+      }
     },
     menuClick(nazev, typ, vratit = true) {
       if (typ === "object") {
@@ -398,6 +376,7 @@ export default {
       deep: true
     },
     viceRadek(value) {
+      localStorage.setItem("viceRadek", JSON.stringify(value))
       this.$nextTick(() => {
         if (value) {
           this.$refs.input.focus();
@@ -405,6 +384,15 @@ export default {
           this.$refs.singleInput.focus();
         }
       })
+    },
+    autocomplete(value) {
+      localStorage.setItem("autocomplete", JSON.stringify(value))
+    },
+    continual(value) {
+      localStorage.setItem("continual", JSON.stringify(value))
+    },
+    small(value) {
+      localStorage.setItem("small", JSON.stringify(value))
     },
     outputIndex(value) {
       if (value === -1) {
@@ -471,7 +459,7 @@ export default {
   mounted() {
     this.fPrefix = localStorage.getItem("dir") || ""
     if (location.hash) {
-      this.canvas = "canvas." + location.hash.replace("#", "")
+      this.canvas = location.hash.replace("#", "") + ".canvas"
     }
     const hesla = localStorage.getItem("hesla")
     if (hesla) {
@@ -484,6 +472,10 @@ export default {
     if (output) {
       this.output = JSON.parse(output)
     }
+    this.viceRadek = JSON.parse(localStorage.getItem("viceRadek") || "false")
+    this.autocomplete = JSON.parse(localStorage.getItem("autocomplete") || "false")
+    this.continual = JSON.parse(localStorage.getItem("continual") || "false")
+    this.small = JSON.parse(localStorage.getItem("small") || "false")
     this.command = localStorage.getItem("command") || ""
     this.$refs.singleInput.focus()
   },
@@ -515,7 +507,9 @@ input.input, textarea.input {
 textarea.input {
   height: calc(100% - 31px);
 }
-
+textarea.input.small {
+  font-size: 6pt;
+}
 input.input::placeholder, textarea.input::placeholder {
   color: #050;
 }
@@ -533,11 +527,15 @@ input.input::placeholder, textarea.input::placeholder {
   display: flex;
   flex-direction: column;
 }
-.menu > button {
+.menu > button, .menu input[type=checkbox] {
   width: 30px;
   height: 26px;
   background-color: #0C0;
   border: 1px solid #444;
+  margin: 0;
+}
+.menu.error > button {
+  background-color: #F00;
 }
 .menu > ul {
   margin: 0px;
