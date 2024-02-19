@@ -420,7 +420,9 @@ export default {
     canvasObsah() {
       this.$nextTick(() => {
         for (const el of document.querySelectorAll(".canvas [data-click]")) {
-          el.addEventListener('click', async () => {
+          el.addEventListener('click', async (e) => {
+            e.preventDefault()
+            e.stopPropagation()
             const click = el.attributes['data-click'].value
             const values = []
             if (el.attributes['data-params']) {
@@ -442,7 +444,11 @@ export default {
         }
 
         for (const el of document.querySelectorAll(".canvas [data-change]")) {
-          el.addEventListener('change', e => {
+          el.addEventListener('change', async e => {
+            if (el.attributes['data-refresh']) {
+              const balik = el.attributes['data-refresh'].value
+              await this.otevri(balik, this.hesla[balik])
+            } 
             const item = el.attributes['data-change'].value
             eval(`${item} = \`${el.value}\``)
           })
